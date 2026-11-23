@@ -1,0 +1,52 @@
+name: 앱 빌드 (서명 없는 IPA)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Xcode 버전 확인
+        run: xcodebuild -version
+
+      - name: XcodeGen 설치 및 프로젝트 생성
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: 빌드
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project Scribe.xcodeproj \
+            -scheme Scribe \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            SYMROOT="$PWD/build" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build | tee build.log
+
+      - name: IPA 묶기
+        run: |
+          mkdir -p Payload
+          cp -R build/Release-iphoneos/Scribe.app Payload/
+          zip -qry owlSeven.ipa Payload
+
+      - name: 결과물 올리기
+        uses: actions/upload-artifact@v4
+        with:
+          name: owlSeven-ipa
+          path: owlSeven.ipa
+
+      - name: 실패 시 로그 올리기
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
